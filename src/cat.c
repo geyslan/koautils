@@ -26,53 +26,73 @@ void cat(int in_fd)
 	}
 }
 
-int main(int argc, char *argv[])
+int is_same_rfile(int in_fd, int out_fd, char *fname)
 {
-	char **file = argv;
-	int in_fd = STDIN_FILENO;
 	struct stat sb;
-	dev_t out_dev;
-	ino_t out_ino;
-	int out_isreg;
-	int out_flags;
-	int ret = EXIT_SUCCESS;
 
-	if (argc == 1) {
-		cat(in_fd);
-		return ret;
+	dev_t out_dev, in_dev;
+	ino_t out_ino, in_ino;
+	int out_isreg, in_isreg;
+	int flags;
+
+	if (fstat(in_fd, &sb) < 0) {
+		//treat error
+		exit(EXIT_FAILURE);
 	}
+	in_dev = sb.st_dev;
+	in_ino = sb.st_ino;
+	in_isreg = S_ISREG(sb.st_mode);
+	//in_isreg = (sb.st_mode & S_IFMT) == S_IFREG;
 
-	if (fstat(STDOUT_FILENO, &sb) < 0) {
+	if (fstat(out_fd, &sb) < 0) {
 		//treat error
 		exit(EXIT_FAILURE);
 	}
 	out_dev = sb.st_dev;
 	out_ino = sb.st_ino;
-	out_isreg = (sb.st_mode & S_IFMT) == S_IFREG;
-	if ((out_flags = fcntl(STDOUT_FILENO, F_GETFL)) < 0) {
-		// treat error
-		exit(EXIT_FAILURE);
+	out_isreg = S_ISREG(sb.st_mode);
+	//out_isreg = (sb.st_mode & S_IFMT) == S_IFREG;
+
+	if ((out_isreg && in_isreg) &&
+		out_dev == in_dev && out_ino == in_ino) {
+		fprintf(stderr, "> ignoring input file (%s) "
+			"since it's the same output\n", fname);
+		if ((flags = fcntl(out_fd, F_GETFL)) < 0) {
+			// treat error
+		}
+		if (!(flags & O_APPEND))
+			fprintf(stderr, "> output file (%s) wasn't open in append mode "
+				"then probably overwritten\n", fname);
+		return 1;
+	}
+	return 0;
+}
+
+int main(int argc, char *argv[])
+{
+	char **file = argv;
+	int in_fd = STDIN_FILENO;
+	int ret = EXIT_SUCCESS;
+
+	if (argc == 1) {
+		if (is_same_rfile(in_fd, STDOUT_FILENO, "<redirection>")) {
+			// treat error
+			exit(EXIT_FAILURE);
+		}
+		cat(in_fd);
+		return ret;
 	}
 
 	while (*(++file)) {
 		if ((in_fd = open(*file, O_RDONLY)) < 0) {
 			// treat error
-			fprintf(stderr, "> error opening file: %s\n", *file);
+			fprintf(stderr, "> error opening file (%s)\n", *file);
 			ret = EXIT_FAILURE;
 			continue;
 		}
-		if (fstat(in_fd, &sb) < 0) {
-			//treat error
-		}
-		if (out_isreg &&
-			out_dev == sb.st_dev && out_ino == sb.st_ino) {
-			ret = EXIT_FAILURE;
+		if (is_same_rfile(in_fd, STDOUT_FILENO, *file)) {
 			// treat error
-			fprintf(stderr, "> ignoring input file %s"
-					" since it is the same output\n", *file);
-			if (!(out_flags & O_APPEND))
-				fprintf(stderr, "> output file %s isn't open in append mode"
-					" then probably overwritten\n", *file);
+			ret = EXIT_FAILURE;
 		} else {
 			cat(in_fd);
 		}
