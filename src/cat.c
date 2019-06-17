@@ -8,12 +8,12 @@
 #define BUFSIZE 8192
 char buf[BUFSIZE];
 
-void cat(int out_fd)
+void cat(int in_fd)
 {
 	ssize_t nread;
 	ssize_t nwritten;
 
-	while((nread = read(out_fd, buf, BUFSIZE)) > 0) {
+	while((nread = read(in_fd, buf, BUFSIZE)) > 0) {
 		if ((nwritten = write(STDOUT_FILENO, buf, nread)) < 0) {
 			// treat error
 			exit(EXIT_FAILURE);
@@ -29,7 +29,7 @@ void cat(int out_fd)
 int main(int argc, char *argv[])
 {
 	char **file = argv;
-	int out_fd;
+	int in_fd = STDIN_FILENO;
 	struct stat sb;
 	dev_t out_dev;
 	ino_t out_ino;
@@ -38,7 +38,7 @@ int main(int argc, char *argv[])
 	int ret = EXIT_SUCCESS;
 
 	if (argc == 1) {
-		cat(STDIN_FILENO);
+		cat(in_fd);
 		return ret;
 	}
 
@@ -55,13 +55,13 @@ int main(int argc, char *argv[])
 	}
 
 	while (*(++file)) {
-		if ((out_fd = open(*file, O_RDONLY)) < 0) {
+		if ((in_fd = open(*file, O_RDONLY)) < 0) {
 			// treat error
 			fprintf(stderr, "> error opening file: %s\n", *file);
 			ret = EXIT_FAILURE;
 			continue;
 		}
-		if (fstat(out_fd, &sb) < 0) {
+		if (fstat(in_fd, &sb) < 0) {
 			//treat error
 		}
 		if (out_isreg &&
@@ -74,9 +74,9 @@ int main(int argc, char *argv[])
 				fprintf(stderr, "> output file %s isn't open in append mode"
 					" then probably overwritten\n", *file);
 		} else {
-			cat(out_fd);
+			cat(in_fd);
 		}
-		if (close(out_fd) < 0) {
+		if (close(in_fd) < 0) {
 			// treat error
 			exit(EXIT_FAILURE);
 		}
