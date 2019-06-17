@@ -42,7 +42,6 @@ int is_same_rfile(int in_fd, int out_fd, char *fname)
 	in_dev = sb.st_dev;
 	in_ino = sb.st_ino;
 	in_isreg = S_ISREG(sb.st_mode);
-	//in_isreg = (sb.st_mode & S_IFMT) == S_IFREG;
 
 	if (fstat(out_fd, &sb) < 0) {
 		//treat error
@@ -51,7 +50,6 @@ int is_same_rfile(int in_fd, int out_fd, char *fname)
 	out_dev = sb.st_dev;
 	out_ino = sb.st_ino;
 	out_isreg = S_ISREG(sb.st_mode);
-	//out_isreg = (sb.st_mode & S_IFMT) == S_IFREG;
 
 	if ((out_isreg && in_isreg) &&
 		out_dev == in_dev && out_ino == in_ino) {
