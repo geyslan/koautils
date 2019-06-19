@@ -39,8 +39,9 @@ void cat(int in_fd)
 	}
 }
 
-int is_same_rfile(int in_fd, int out_fd, char *fname)
+int is_same_rfile(int in_fd, char *fname)
 {
+	int out_fd = STDOUT_FILENO;
 	struct stat sb;
 
 	dev_t out_dev, in_dev;
@@ -66,6 +67,8 @@ int is_same_rfile(int in_fd, int out_fd, char *fname)
 
 	if ((out_isreg && in_isreg) &&
 		out_dev == in_dev && out_ino == in_ino) {
+		if (!fname)
+			fname = "<redirected>";
 		fprintf(stderr, "> ignoring input file (%s) "
 			"since it's the same as the output\n", fname);
 		if ((flags = fcntl(out_fd, F_GETFL)) < 0) {
@@ -86,7 +89,7 @@ int main(int argc, char *argv[])
 	int ret = EXIT_SUCCESS;
 
 	if (argc == 1) {
-		if (is_same_rfile(in_fd, STDOUT_FILENO, "<redirected>")) {
+		if (is_same_rfile(in_fd, NULL)) {
 			// treat error
 			exit(EXIT_FAILURE);
 		}
@@ -102,7 +105,7 @@ int main(int argc, char *argv[])
 			ret = EXIT_FAILURE;
 			continue;
 		}
-		if (is_same_rfile(in_fd, STDOUT_FILENO, *file)) {
+		if (is_same_rfile(in_fd, *file)) {
 			// treat error
 			ret = EXIT_FAILURE;
 		} else {
