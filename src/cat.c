@@ -8,6 +8,14 @@
 #define BUFSIZE 8192
 char buf[BUFSIZE];
 
+static inline closefd(int fd)
+{
+	if (close(fd) < 0) {
+		// treat error
+		exit(EXIT_FAILURE);
+	}
+}
+
 void cat(int in_fd)
 {
 	ssize_t nread;
@@ -81,10 +89,7 @@ int main(int argc, char *argv[])
 		return ret;
 	}
 
-	if (close(in_fd) < 0) {
-		// treat error
-		exit(EXIT_FAILURE);
-	}
+	closefd(in_fd);
 	while (*(++file)) {
 		if ((in_fd = open(*file, O_RDONLY)) < 0) {
 			// treat error
@@ -98,10 +103,7 @@ int main(int argc, char *argv[])
 		} else {
 			cat(in_fd);
 		}
-		if (close(in_fd) < 0) {
-			// treat error
-			exit(EXIT_FAILURE);
-		}
+		closefd(in_fd);
 	}
 	return ret;
 }
