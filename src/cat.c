@@ -8,6 +8,14 @@
 #define BUFSIZE 8192
 char buf[BUFSIZE];
 
+static inline void closefd(int fd)
+{
+	if (close(fd) < 0) {
+		// treat error
+		exit(EXIT_FAILURE);
+	}
+}
+
 void cat(int in_fd)
 {
 	ssize_t nread;
@@ -18,6 +26,11 @@ void cat(int in_fd)
 			// treat error
 			exit(EXIT_FAILURE);
 		}
+		if (nwritten < nread) {
+			// treat error
+			closefd(in_fd);
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	if (nread < 0) {
@@ -26,8 +39,9 @@ void cat(int in_fd)
 	}
 }
 
-int is_same_rfile(int in_fd, int out_fd, char *fname)
+int is_same_rfile(int in_fd, char *fname)
 {
+	int out_fd = STDOUT_FILENO;
 	struct stat sb;
 
 	dev_t out_dev, in_dev;
@@ -51,19 +65,22 @@ int is_same_rfile(int in_fd, int out_fd, char *fname)
 	out_ino = sb.st_ino;
 	out_isreg = S_ISREG(sb.st_mode);
 
-	if ((out_isreg && in_isreg) &&
-		out_dev == in_dev && out_ino == in_ino) {
-		fprintf(stderr, "> ignoring input file (%s) "
-			"since it's the same as the output\n", fname);
-		if ((flags = fcntl(out_fd, F_GETFL)) < 0) {
-			// treat error
-		}
-		if (!(flags & O_APPEND))
-			fprintf(stderr, "> output file (%s) wasn't open in "
-				"append mode then probably truncated\n", fname);
-		return 1;
+	if (!(out_isreg && in_isreg &&
+	    out_dev == in_dev &&
+	    out_ino == in_ino))
+		return 0;
+
+	if (!fname)
+		fname = "<redirected>";
+	fprintf(stderr, "> ignoring input file (%s) "
+		"since it's the same as the output\n", fname);
+	if ((flags = fcntl(out_fd, F_GETFL)) < 0) {
+		// treat error
 	}
-	return 0;
+	if (!(flags & O_APPEND))
+		fprintf(stderr, "> output file (%s) wasn't open in "
+			"append mode then probably truncated\n", fname);
+	return 1;
 }
 
 int main(int argc, char *argv[])
@@ -73,7 +90,7 @@ int main(int argc, char *argv[])
 	int ret = EXIT_SUCCESS;
 
 	if (argc == 1) {
-		if (is_same_rfile(in_fd, STDOUT_FILENO, "<redirected>")) {
+		if (is_same_rfile(in_fd, NULL)) {
 			// treat error
 			exit(EXIT_FAILURE);
 		}
@@ -81,10 +98,7 @@ int main(int argc, char *argv[])
 		return ret;
 	}
 
-	if (close(in_fd) < 0) {
-		// treat error
-		exit(EXIT_FAILURE);
-	}
+	closefd(in_fd);
 	while (*(++file)) {
 		if ((in_fd = open(*file, O_RDONLY)) < 0) {
 			// treat error
@@ -92,16 +106,13 @@ int main(int argc, char *argv[])
 			ret = EXIT_FAILURE;
 			continue;
 		}
-		if (is_same_rfile(in_fd, STDOUT_FILENO, *file)) {
+		if (is_same_rfile(in_fd, *file)) {
 			// treat error
 			ret = EXIT_FAILURE;
 		} else {
 			cat(in_fd);
 		}
-		if (close(in_fd) < 0) {
-			// treat error
-			exit(EXIT_FAILURE);
-		}
+		closefd(in_fd);
 	}
 	return ret;
 }
