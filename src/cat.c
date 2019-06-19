@@ -54,13 +54,13 @@ int is_same_rfile(int in_fd, int out_fd, char *fname)
 	if ((out_isreg && in_isreg) &&
 		out_dev == in_dev && out_ino == in_ino) {
 		fprintf(stderr, "> ignoring input file (%s) "
-			"since it's the same output\n", fname);
+			"since it's the same as the output\n", fname);
 		if ((flags = fcntl(out_fd, F_GETFL)) < 0) {
 			// treat error
 		}
 		if (!(flags & O_APPEND))
-			fprintf(stderr, "> output file (%s) wasn't open in append mode "
-				"then probably overwritten\n", fname);
+			fprintf(stderr, "> output file (%s) wasn't open in "
+				"append mode then probably truncated\n", fname);
 		return 1;
 	}
 	return 0;
@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
 	int ret = EXIT_SUCCESS;
 
 	if (argc == 1) {
-		if (is_same_rfile(in_fd, STDOUT_FILENO, "<redirection>")) {
+		if (is_same_rfile(in_fd, STDOUT_FILENO, "<redirected>")) {
 			// treat error
 			exit(EXIT_FAILURE);
 		}
@@ -81,6 +81,10 @@ int main(int argc, char *argv[])
 		return ret;
 	}
 
+	if (close(in_fd) < 0) {
+		// treat error
+		exit(EXIT_FAILURE);
+	}
 	while (*(++file)) {
 		if ((in_fd = open(*file, O_RDONLY)) < 0) {
 			// treat error
