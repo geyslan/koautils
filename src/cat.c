@@ -8,7 +8,7 @@
 #define BUFSIZE 8192
 char buf[BUFSIZE];
 
-static inline closefd(int fd)
+static inline void closefd(int fd)
 {
 	if (close(fd) < 0) {
 		// treat error
@@ -65,21 +65,22 @@ int is_same_rfile(int in_fd, char *fname)
 	out_ino = sb.st_ino;
 	out_isreg = S_ISREG(sb.st_mode);
 
-	if ((out_isreg && in_isreg) &&
-		out_dev == in_dev && out_ino == in_ino) {
-		if (!fname)
-			fname = "<redirected>";
-		fprintf(stderr, "> ignoring input file (%s) "
-			"since it's the same as the output\n", fname);
-		if ((flags = fcntl(out_fd, F_GETFL)) < 0) {
-			// treat error
-		}
-		if (!(flags & O_APPEND))
-			fprintf(stderr, "> output file (%s) wasn't open in "
-				"append mode then probably truncated\n", fname);
-		return 1;
+	if (!(out_isreg && in_isreg &&
+	    out_dev == in_dev &&
+	    out_ino == in_ino))
+		return 0;
+
+	if (!fname)
+		fname = "<redirected>";
+	fprintf(stderr, "> ignoring input file (%s) "
+		"since it's the same as the output\n", fname);
+	if ((flags = fcntl(out_fd, F_GETFL)) < 0) {
+		// treat error
 	}
-	return 0;
+	if (!(flags & O_APPEND))
+		fprintf(stderr, "> output file (%s) wasn't open in "
+			"append mode then probably truncated\n", fname);
+	return 1;
 }
 
 int main(int argc, char *argv[])
