@@ -26,6 +26,11 @@ void cat(int in_fd)
 			// treat error
 			exit(EXIT_FAILURE);
 		}
+		if (nwritten < nread) {
+			// treat error
+			closefd(in_fd);
+			exit(EXIT_FAILURE);
+		}
 	}
 
 	if (nread < 0) {
