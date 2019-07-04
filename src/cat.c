@@ -2,19 +2,15 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "common.h"
 #include "error.h"
 
 #define BUFSIZE 8192
 char buf[BUFSIZE];
-
-static inline void closefd(int fd)
-{
-	if (close(fd) < 0)
-		err_exit("closing fd %d", fd);
-}
 
 void cat(int in_fd)
 {
@@ -75,31 +71,50 @@ int is_same_rfile(int in_fd, char *fname)
 
 int main(int argc, char *argv[])
 {
-	char **file = argv;
-	int in_fd = STDIN_FILENO;
+	char *input;
+	int opt;
+	int u_flag = 0;
 	int ret = EXIT_SUCCESS;
 
 	app_set_name(argv[0]);
 
-	if (argc == 1) {
-		if (is_same_rfile(in_fd, NULL))
-			err_exit("input = output");
-		cat(in_fd);
+	while ((opt = getopt(argc, argv, "u")) != -1) {
+		switch (opt) {
+		case 'u':
+			/* POSIX COMPLIANT */
+			/* read and write are always (u)nbuffered */
+			u_flag = 1;
+			break;
+		default:
+			err_exit("Usage: %s [-u] [files]", app_get_name());
+		}
+	}
+	if (u_flag)
+		++argc;
+
+	if (!argv[optind]) {
+		if (is_same_rfile(STDIN_FILENO, NULL))
+			err_exit_n(EXIT_FAILURE, "input = output");
+		cat(STDIN_FILENO);
 		return ret;
 	}
-
-	closefd(in_fd);
-	while (*(++file)) {
-		if ((in_fd = open(*file, O_RDONLY)) < 0) {
-			err("opening file (%s)", *file);
+	while ((input = argv[optind++])) {
+		if ((optind < argc) && (!strcmp(input, "-"))) {
+			cat(STDIN_FILENO);
+			continue;
+		}
+		int in_fd;
+		if ((in_fd = open(input, O_RDONLY)) < 0) {
+			err("opening file (%s)", input);
 			ret = EXIT_FAILURE;
 			continue;
 		}
-		if (is_same_rfile(in_fd, *file))
+		if (is_same_rfile(in_fd, input))
 			ret = EXIT_FAILURE;
 		else
 			cat(in_fd);
-		closefd(in_fd);
+		if (close(in_fd) < 0)
+			err_exit("closing fd %d", in_fd);
 	}
 	return ret;
 }
