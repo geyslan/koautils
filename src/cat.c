@@ -2,19 +2,15 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include "common.h"
 #include "error.h"
 
 #define BUFSIZE 8192
 char buf[BUFSIZE];
-
-static inline void closefd(int fd)
-{
-	if (close(fd) < 0)
-		err_exit("closing fd %d", fd);
-}
 
 void cat(int in_fd)
 {
@@ -34,9 +30,8 @@ void cat(int in_fd)
 		err_exit("reading from fd %d", in_fd);
 }
 
-int is_same_rfile(int in_fd, char *fname)
+int is_same_rfile(int in_fd, int out_fd)
 {
-	int out_fd = STDOUT_FILENO;
 	struct stat sb;
 
 	dev_t out_dev, in_dev;
@@ -61,45 +56,72 @@ int is_same_rfile(int in_fd, char *fname)
 	    out_ino == in_ino))
 		return 0;
 
-	if (!fname)
-		fname = "<redirected>";
-	err("ignoring input file (%s) "
-	    "since it's the same as the output", fname);
 	if ((flags = fcntl(out_fd, F_GETFL)) < 0)
 		err_exit("fcntl fd %d", out_fd);
-	if (!(flags & O_APPEND))
-		err("output file (%s) wasn't open in "
-		    "append mode then probably truncated", fname);
-	return 1;
+	return (flags & O_APPEND) ? O_APPEND : O_CREAT;
 }
 
 int main(int argc, char *argv[])
 {
-	char **file = argv;
-	int in_fd = STDIN_FILENO;
+	int opt;
+	int limit = argc;
 	int ret = EXIT_SUCCESS;
 
 	app_set_name(argv[0]);
 
-	if (argc == 1) {
-		if (is_same_rfile(in_fd, NULL))
-			err_exit("input = output");
-		cat(in_fd);
-		return ret;
+	/* get limit of non literal args */
+	for (int i = 0; i < argc; ++i) {
+		if (!strcmp(argv[i], "--")) {
+			limit = i;
+			break;
+		}
 	}
 
-	closefd(in_fd);
-	while (*(++file)) {
-		if ((in_fd = open(*file, O_RDONLY)) < 0) {
-			err("opening file (%s)", *file);
+	while ((opt = getopt(argc, argv, "u")) != -1) {
+		switch (opt) {
+		case 'u':
+			/* POSIX COMPLIANT */
+			/* read and write are always (u)nbuffered */
+			break;
+		default:
+			err_exit("Usage: %s [-u] [files]", app_get_name());
+		}
+	}
+
+	do {
+		char *input;
+		int in_fd = -1;
+		int same;
+
+		input = argv[optind];
+
+		if ((!input) ||
+		    ((!strcmp(input, "-")) && (optind <= limit))) {
+			in_fd = STDIN_FILENO;
+		} else if ((in_fd = open(input, O_RDONLY)) < 0) {
+			err("opening file (%s)", input);
 			ret = EXIT_FAILURE;
 			continue;
 		}
-		if (is_same_rfile(in_fd, *file))
-			ret = EXIT_FAILURE;
-		else
+		same = is_same_rfile(in_fd, STDOUT_FILENO);
+		if (!same) {
 			cat(in_fd);
-		closefd(in_fd);
-	}
+			if (in_fd == STDIN_FILENO)
+				continue;
+		} else {
+			ret = EXIT_FAILURE;
+			if (!input)
+				err_exit_n(ret, "input = output");
+			err("ignoring input file (%s) "
+			    "since it's the same as the output", input);
+			if (same == O_CREAT) {
+				err("output file wasn't open in "
+				    "append mode then probably truncated");
+			}
+		}
+		if (close(in_fd) < 0)
+			err_exit("closing fd %d", in_fd);
+	} while (++optind < argc);
+
 	return ret;
 }

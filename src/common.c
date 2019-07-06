@@ -4,35 +4,37 @@
 #include "common.h"
 #include "error.h"
 
-static char *app_path;
-static char *app_name;
+/* POSIX Issue 7, 2018 edition
+ *  12. Utility Conventions - 12.2 Utility Syntax Guidelines - Guideline 1
+ *  Utility names should be between two and nine characters, inclusive.
+ */
+#define APPNAMELEN 9
 
-static void app_free_path(void);
+static char app_name[APPNAMELEN + 1];
 
 void app_set_name(char *path)
 {
+	char *app_path, *bname;
 	int path_len;
 
-	if (app_path || !path)
+	if (app_name[0]) {
+		err("app_name already set: %s", app_name);
 		return;
-	path_len = strlen(path) + 1;
+	}
+	if (!path)
+		err_exit("app_name cannot be NULL");
 
+	path_len = strlen(path) + 1;
 	app_path = malloc(path_len * sizeof(*path));
 	if (!app_path)
-		err_exit("allocating");
+		err_exit("malloc");
 	strncpy(app_path, path, path_len);
-	app_name = basename(app_path);
-
-	if (atexit(app_free_path))
-		err_exit("cannot set exit function");
+	bname = basename(app_path);
+	strncpy(app_name, bname, APPNAMELEN);
+	free(app_path);
 }
 
 const char *app_get_name(void)
 {
 	return app_name;
-}
-
-static void app_free_path(void)
-{
-	free(app_path);
 }
